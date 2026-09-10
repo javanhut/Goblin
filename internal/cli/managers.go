@@ -9,6 +9,7 @@ import (
 	"goblin/internal/catalog"
 	"goblin/internal/config"
 	"goblin/internal/envs"
+	"goblin/internal/provision"
 	"goblin/internal/ui"
 )
 
@@ -16,7 +17,9 @@ func runAdd(args []string) error {
 	fs := newFlags("add", "[options] <kind>...",
 		"Adds package managers to goblin.toml, seeds their default artifacts into",
 		"the exclusion list, regenerates env scripts and syncs the ignore file.",
-		"Use kind=path to bind a manager to a subdirectory: goblin add npm=web")
+		"Use kind=path to bind a manager to a subdirectory: goblin add npm=web",
+		"Managers missing from the host are downloaded into .goblin/ when possible.")
+	noDownload := fs.Bool("no-download", false, "do not download missing package managers")
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
@@ -29,6 +32,7 @@ func runAdd(args []string) error {
 		return err
 	}
 	var added []string
+	var missing []catalog.Spec
 	for _, arg := range fs.Args() {
 		kind, path, _ := strings.Cut(arg, "=")
 		spec, ok := catalog.Lookup(kind)
@@ -53,8 +57,8 @@ func runAdd(args []string) error {
 		p.Cfg.Managers = append(p.Cfg.Managers, m)
 		p.Cfg.AddExclude(envs.Artifacts(m)...)
 		added = append(added, arg)
-		if !spec.Available() {
-			ui.Warn("%s is not installed (`%s` not on PATH); build will skip it until it is", spec.Name, spec.Binary)
+		if !p.Env.HasBinary(spec) {
+			missing = append(missing, spec)
 		}
 	}
 	if len(added) == 0 {
@@ -70,7 +74,23 @@ func runAdd(args []string) error {
 		return err
 	}
 	ui.Success("added %s", strings.Join(added, ", "))
-	return p.sync(syncOptions{quiet: true})
+	if err := p.sync(syncOptions{quiet: true}); err != nil {
+		return err
+	}
+	var failed bool
+	for _, spec := range missing {
+		if *noDownload {
+			ui.Warn("%s", availabilityNote(spec))
+			continue
+		}
+		if !p.ensureManager(spec, spec.Kind, true) {
+			failed = true
+		}
+	}
+	if failed {
+		return buildError{}
+	}
+	return nil
 }
 
 func runRemove(args []string) error {
@@ -103,6 +123,9 @@ func runRemove(args []string) error {
 			}
 			kept = append(kept, m)
 		}
+		if len(kept) < len(p.Cfg.Managers) && !hasPath {
+			_ = provision.Remove(p.Env, kind)
+		}
 		if len(kept) == len(p.Cfg.Managers) {
 			ui.Info("%s is not configured", arg)
 		}
@@ -129,13 +152,17 @@ func runList(args []string) error {
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
-	fmt.Printf("%-9s %-11s %-6s %s\n", ui.Bold("KIND"), ui.Bold("LANGUAGE"), ui.Bold("BIN"), ui.Bold("DESCRIPTION"))
+	fmt.Printf("%-9s %-11s %-8s %-9s %s\n", ui.Bold("KIND"), ui.Bold("LANGUAGE"), ui.Bold("ON HOST"), ui.Bold("DOWNLOAD"), ui.Bold("DESCRIPTION"))
 	for _, s := range catalog.All() {
 		avail := ui.Dim("no")
 		if s.Available() {
 			avail = "yes"
 		}
-		fmt.Printf("%-9s %-11s %-6s %s\n", s.Kind, s.Language, avail, s.Description)
+		dl := ui.Dim("no")
+		if provision.Reason(s) == "" {
+			dl = "yes"
+		}
+		fmt.Printf("%-9s %-11s %-8s %-9s %s\n", s.Kind, s.Language, avail, dl, s.Description)
 	}
 	return nil
 }

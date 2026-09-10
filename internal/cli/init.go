@@ -24,6 +24,7 @@ func runInit(args []string) error {
 	noVCSInit := fs.Bool("no-vcs-init", false, "do not create a repository when none exists")
 	build := fs.Bool("build", false, "run `goblin build` after init (non-interactive modes)")
 	force := fs.Bool("force", false, "overwrite an existing goblin.toml")
+	noDownload := fs.Bool("no-download", false, "do not download missing package managers")
 	dir := fs.String("dir", ".", "project directory")
 	if err := parseFlags(fs, args); err != nil {
 		return err
@@ -151,6 +152,27 @@ func runInit(args []string) error {
 		ui.Info("managers: %s", strings.Join(names, ", "))
 	}
 	ui.Info("excluded:  %s", joinOrNone(cfg.Exclude.Paths))
+
+	seen := map[string]bool{}
+	var unavailable []string
+	for _, m := range cfg.Managers {
+		spec, _ := catalog.Lookup(m.Kind)
+		if seen[m.Kind] || p.Env.HasBinary(spec) {
+			continue
+		}
+		seen[m.Kind] = true
+		if *noDownload {
+			ui.Warn("%s", availabilityNote(spec))
+			continue
+		}
+		fmt.Println()
+		if !p.ensureManager(spec, spec.Kind, true) {
+			unavailable = append(unavailable, spec.Kind)
+		}
+	}
+	if len(unavailable) > 0 {
+		ui.Warn("not available yet: %s (build will skip them)", strings.Join(unavailable, ", "))
+	}
 
 	if ans.Build {
 		fmt.Println()

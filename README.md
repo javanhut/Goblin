@@ -31,6 +31,7 @@ goblin shell                      # a shell with the environment applied
 goblin run -- cargo test          # one command inside the environment
 goblin status                     # what is configured, built and excluded
 goblin clean                      # delete excluded artifacts (asks first)
+goblin install uv                 # download a manager into .goblin/ (also automatic)
 ```
 
 Non-interactive init for scripts and CI:
@@ -68,6 +69,25 @@ RUST_LOG = "info"                  # applied to every command in the env
 
 `install`, `build` and `artifacts` on a manager override the catalog defaults.
 Commands and variables may use `{root}`, `{path}`, `{bin}` and `{name}`.
+
+## Missing tools are downloaded
+
+When a manager is not installed on the host, `goblin init`, `goblin add` and
+`goblin build` fetch it from its official release channel straight into
+`.goblin/`, so `goblin shell` has it on PATH and the host stays clean:
+
+| manager | source |
+|---------|--------|
+| uv, bun, deno, pnpm | GitHub release of the project |
+| npm, yarn | Node.js LTS tarball from nodejs.org (yarn via `npm install -g`) |
+| go | latest stable toolchain from go.dev |
+| cargo | rustup with `CARGO_HOME` and `RUSTUP_HOME` inside `.goblin/` |
+| poetry | official installer with `POETRY_HOME` inside `.goblin/` |
+
+`goblin install [kind...]` does it explicitly, `--force` re-downloads, and
+`--no-download` on init, add and build keeps goblin from touching the network.
+Everything else (zig, bundler, composer, maven, gradle, dotnet, mix, swift, pip)
+has to come from the system; `goblin list` shows which is which.
 
 ## How isolation works
 

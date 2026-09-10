@@ -65,8 +65,11 @@ func runStatus(args []string) error {
 	}
 	for _, m := range p.Cfg.Managers {
 		spec, _ := catalog.Lookup(m.Kind)
-		bin := "ok"
-		if !spec.Available() {
+		bin := "system"
+		switch {
+		case p.Env.IsProvisioned(m.Kind):
+			bin = "goblin " + p.Env.ProvisionedVersion(m.Kind)
+		case !p.Env.HasBinary(spec):
 			bin = spec.Binary + " missing"
 		}
 		lock := ui.Dim("no lockfile")
@@ -76,7 +79,7 @@ func runStatus(args []string) error {
 				break
 			}
 		}
-		fmt.Printf("  %-9s %-14s %-14s %s\n", m.Kind, m.Path, bin, lock)
+		fmt.Printf("  %-9s %-14s %-22s %s\n", m.Kind, m.Path, bin, lock)
 	}
 
 	fmt.Println()

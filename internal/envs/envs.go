@@ -76,6 +76,18 @@ func Resolve(dir string, cfg *config.Config) (*Environment, error) {
 				env.PathPrepend = append(env.PathPrepend, p)
 			}
 		}
+		if spec.Provisionable() && env.IsProvisioned(spec.Kind) {
+			for k, v := range spec.Provision.Env {
+				env.Vars[k] = catalog.Expand(v, tv)
+			}
+			for _, p := range spec.Provision.PathPrepend {
+				p = catalog.Expand(p, tv)
+				if !seenPath[p] {
+					seenPath[p] = true
+					env.PathPrepend = append(env.PathPrepend, p)
+				}
+			}
+		}
 	}
 	// Global overrides come last so users can pin anything.
 	gtv := map[string]string{"root": root, "path": abs, "bin": env.Bin, "name": cfg.Goblin.Name}
@@ -92,6 +104,54 @@ func (e *Environment) templateVars(m config.Manager) map[string]string {
 		"bin":  e.Bin,
 		"name": e.Name,
 	}
+}
+
+// TemplateVars exposes the placeholder values for a manager.
+func (e *Environment) TemplateVars(m config.Manager) map[string]string {
+	return e.templateVars(m)
+}
+
+// ProvisionMarker is the file recording that goblin installed kind itself.
+func (e *Environment) ProvisionMarker(kind string) string {
+	return filepath.Join(e.Root, "provisioned", kind)
+}
+
+// IsProvisioned reports whether goblin installed kind into the root.
+func (e *Environment) IsProvisioned(kind string) bool {
+	_, err := os.Stat(e.ProvisionMarker(kind))
+	return err == nil
+}
+
+// ProvisionedVersion returns the version recorded at provisioning time.
+func (e *Environment) ProvisionedVersion(kind string) string {
+	data, err := os.ReadFile(e.ProvisionMarker(kind))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// LookPath finds an executable on the environment's PATH: goblin
+// directories first, then the inherited PATH.
+func (e *Environment) LookPath(name string) (string, bool) {
+	for _, dir := range e.PathPrepend {
+		p := filepath.Join(dir, name)
+		if st, err := os.Stat(p); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+			return p, true
+		}
+	}
+	p, err := exec.LookPath(name)
+	return p, err == nil
+}
+
+// HasBinary reports whether the manager's executable is usable inside
+// the environment.
+func (e *Environment) HasBinary(spec catalog.Spec) bool {
+	if spec.Binary == "" {
+		return true
+	}
+	_, ok := e.LookPath(spec.Binary)
+	return ok
 }
 
 // ManagerDir returns the absolute directory a manager runs in.
@@ -155,7 +215,13 @@ func (e *Environment) Command(dir, line string) *exec.Cmd {
 
 // Exec builds an exec.Cmd for argv (no shell) inside dir.
 func (e *Environment) Exec(dir string, argv []string) *exec.Cmd {
-	cmd := exec.Command(argv[0], argv[1:]...)
+	name := argv[0]
+	if !strings.Contains(name, string(os.PathSeparator)) {
+		if p, ok := e.LookPath(name); ok {
+			name = p
+		}
+	}
+	cmd := exec.Command(name, argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = e.Environ()
 	cmd.Stdin = os.Stdin

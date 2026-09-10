@@ -34,6 +34,7 @@ func init() {
 		{"exclude", "Add paths to the exclusion list and sync", runExclude},
 		{"include", "Remove paths from the exclusion list and sync", runInclude},
 		{"clean", "Delete excluded build artifacts and packages from disk", runClean},
+		{"install", "Download missing package managers into the environment", runInstall},
 		{"add", "Add a package manager to the environment", runAdd},
 		{"remove", "Remove a package manager from the environment", runRemove},
 		{"list", "List package managers goblin knows about", runList},
@@ -112,7 +113,7 @@ func runHelp(_ []string) error {
 	fmt.Println()
 	fmt.Println("Typical flow:")
 	fmt.Println("  goblin init                      pick managers and a VCS, writes goblin.toml")
-	fmt.Println("  goblin build                     fetch + build inside .goblin/")
+	fmt.Println("  goblin build                     download missing managers, fetch + build inside .goblin/")
 	fmt.Println("  goblin sync                      write .gitignore/.ivaldiignore, untrack artifacts")
 	fmt.Println("  goblin exclude target/ dist/     add more paths to the exclusion list")
 	fmt.Println("  goblin shell                     work inside the environment")

@@ -19,6 +19,7 @@ func runBuild(args []string) error {
 	installOnly := fs.Bool("install-only", false, "fetch dependencies but skip build steps")
 	dryRun := fs.Bool("dry-run", false, "print the commands without running them")
 	noSync := fs.Bool("no-sync", false, "skip updating the ignore file afterwards")
+	noDownload := fs.Bool("no-download", false, "do not download missing package managers")
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
@@ -56,9 +57,13 @@ func runBuild(args []string) error {
 			label += " (" + m.Path + ")"
 		}
 		spec, _ := catalog.Lookup(m.Kind)
-		if !spec.Available() && !*dryRun {
-			ui.Warn("%s: %s is not installed; skipping", label, spec.Binary)
+		if !*dryRun && !p.ensureManager(spec, label, !*noDownload) {
 			failed = append(failed, label)
+			continue
+		}
+		if !spec.DetectedIn(p.Env.ManagerDir(m)) {
+			ui.Info("%s: no %s yet; tool is ready, create the project inside `goblin shell`", label, strings.Join(spec.Detect, " / "))
+			built = append(built, label)
 			continue
 		}
 		install, build := p.Env.Steps(m)

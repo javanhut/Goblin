@@ -44,6 +44,9 @@ type Spec struct {
 	Artifacts []string
 	// Lockfiles are files worth committing; used only for status output.
 	Lockfiles []string
+	// Provision says how goblin can install the manager into the root
+	// when the host lacks it. Nil means no information.
+	Provision *Provision
 }
 
 var specs = []Spec{
