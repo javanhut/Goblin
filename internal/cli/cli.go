@@ -14,8 +14,9 @@ import (
 	"goblin/internal/ui"
 )
 
-// Version is the goblin release string.
-const Version = "0.1.0"
+// Version is the goblin release string; overridden at link time via
+// -X goblin/internal/cli.Version=<v> (see lazy.toml).
+var Version = "0.1.0"
 
 type command struct {
 	name    string

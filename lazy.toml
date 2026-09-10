@@ -1,0 +1,116 @@
+# ImLazy configuration for Goblin.
+#   imlazy            -> check (format, vet, test)
+#   imlazy build      -> ./goblin
+#   imlazy install    -> /usr/local/bin/goblin (only the copy asks for root)
+
+[settings]
+default = "check"
+shell = "bash"
+escalate = "sudo"
+
+[variables]
+name = "goblin"
+prefix = "/usr/local"
+bindir = "{{prefix}}/bin"
+ldflags = "-s -w -X goblin/internal/cli.Version={{version}}"
+version = "0.1.0"
+
+[env]
+CGO_ENABLED = "0"
+GOFLAGS = "-trimpath"
+
+[commands]
+
+[commands.build]
+desc = "Build the goblin binary"
+run = ["go build -ldflags '{{ldflags}}' -o {{name}} ."]
+alias = ["b"]
+watch = ["**/*.go", "go.mod", "go.sum"]
+if_changed = ["**/*.go", "go.mod", "go.sum"]
+timeout = "5m"
+
+[commands.release]
+desc = "Static release build for the current platform"
+run = ["go build -ldflags '{{ldflags}}' -o {{name}}-{{os}}-{{arch}} ."]
+env = { GOOS = "{{os}}", GOARCH = "{{arch}}" }
+timeout = "5m"
+
+[commands.test]
+desc = "Run the unit tests"
+run = ["go test ./..."]
+alias = ["t"]
+watch = ["**/*.go"]
+
+[commands."test:race"]
+desc = "Run the unit tests with the race detector"
+run = ["go test -race ./..."]
+env = { CGO_ENABLED = "1" }
+
+[commands."test:verbose"]
+desc = "Run the unit tests verbosely, pass a package after --"
+run = ["go test -v {{args}} ./..."]
+
+[commands.vet]
+desc = "Run go vet"
+run = ["go vet ./..."]
+
+[commands.format]
+desc = "Format all Go sources"
+run = ["gofmt -w ."]
+alias = ["fmt", "f"]
+
+[commands."format:check"]
+desc = "Fail if any file is not gofmt-clean"
+run = ["test -z \"$(gofmt -l .)\" || (gofmt -l . && exit 1)"]
+
+[commands.tidy]
+desc = "Tidy go.mod and go.sum"
+run = ["go mod tidy"]
+
+[commands.check]
+desc = "Format check, vet and tests"
+dep = ["format:check", "vet", "test"]
+run = ["echo 'all checks passed'"]
+alias = ["c", "ci"]
+
+[commands.run]
+desc = "Run goblin from source, pass goblin arguments after --"
+run = ["go run . {{args}}"]
+alias = ["r"]
+
+[commands.dev]
+desc = "Rebuild goblin on every change"
+run = ["go build -o {{name}} . && ./{{name}} version"]
+watch = ["**/*.go"]
+
+[commands.smoke]
+desc = "End-to-end smoke test of init, build, exclude and clean in a temp dir"
+dep = ["build"]
+run = [
+  "tmp=$(mktemp -d) && cp ./{{name}} $tmp/ && cd $tmp && mkdir demo && cd demo && printf 'module demo\\ngo 1.22\\n' > go.mod && printf 'package main\\nfunc main() {}\\n' > main.go && git init -q && ../{{name}} init -y --name demo && ../{{name}} build && ../{{name}} exclude dist/ && ../{{name}} status && ../{{name}} clean -y && cd / && rm -rf $tmp",
+]
+timeout = "5m"
+
+[commands.install]
+desc = "Install goblin into the prefix bin dir (default /usr/local/bin)"
+dep = ["build"]
+run = ["install -m 755 ./{{name}} {{bindir}}/{{name}}"]
+escalate = true
+
+[commands.uninstall]
+desc = "Remove goblin from the prefix bin dir"
+run = ["rm -f {{bindir}}/{{name}}"]
+escalate = true
+
+[commands.clean]
+desc = "Remove build outputs and the local goblin environment"
+run = [
+  "rm -f ./{{name}} ./{{name}}-*",
+  "rm -rf .goblin",
+  "go clean ./...",
+]
+
+[commands.seal]
+desc = "Gather everything and seal it with ivaldi, message after --"
+dep = ["check"]
+run = ["ivaldi gather --allow-all . && ivaldi seal -m \"{{args}}\""]
