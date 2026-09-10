@@ -96,11 +96,13 @@ desc = "Install goblin into the prefix bin dir (default /usr/local/bin)"
 dep = ["build"]
 run = ["install -m 755 ./{{name}} {{bindir}}/{{name}}"]
 escalate = true
+writes = ["{{bindir}}"]
 
 [commands.uninstall]
 desc = "Remove goblin from the prefix bin dir"
 run = ["rm -f {{bindir}}/{{name}}"]
 escalate = true
+writes = ["{{bindir}}"]
 
 [commands.clean]
 desc = "Remove build outputs and the local goblin environment"
