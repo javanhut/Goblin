@@ -98,6 +98,18 @@ manager honours (`CARGO_HOME`, `GOMODCACHE`, `npm_config_cache`, `UV_CACHE_DIR`,
 which is first on `PATH` inside `goblin shell`. Delete `.goblin/` and the host
 machine is untouched; run `goblin build` and it is back.
 
+The isolation is a containment baseline, not only the managers you listed.
+Every environment redirects the global caches, homes and install prefixes of
+every manager goblin knows into `.goblin/`, so a tool used ad hoc inside
+`goblin shell` stays contained too. Running `npm install -g`, `pip install` or
+`cargo install` inside the environment writes into `.goblin/`, never your home
+directory, even when that manager is not in `goblin.toml`.
+
+Inside `goblin shell` the prompt is prefixed with a green `(goblin:<name>)`
+badge so it is obvious which environment is active. Any existing prompt is
+preserved and the badge is added in front of it. This works in RavenShell,
+bash, zsh, fish and POSIX sh; `$GOBLIN_ENV` also holds the environment name.
+
 To apply the environment to your current shell instead of spawning one:
 
 ```sh

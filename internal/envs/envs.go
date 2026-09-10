@@ -57,6 +57,16 @@ func Resolve(dir string, cfg *config.Config) (*Environment, error) {
 	env.PathPrepend = append(env.PathPrepend, env.Bin)
 
 	seenPath := map[string]bool{env.Bin: true}
+
+	// Containment baseline: redirect every known manager's global caches and
+	// install prefixes into the root, so ad-hoc tool use inside the
+	// environment stays isolated even for managers not listed in goblin.toml.
+	// Configured managers below override these with their full settings.
+	baseVars := map[string]string{"root": root, "path": abs, "bin": env.Bin, "name": cfg.Goblin.Name}
+	for k, v := range catalog.Containment() {
+		env.Vars[k] = catalog.Expand(v, baseVars)
+	}
+
 	for _, m := range cfg.Managers {
 		spec, ok := catalog.Lookup(m.Kind)
 		if !ok {

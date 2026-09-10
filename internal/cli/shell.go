@@ -36,9 +36,15 @@ func runShell(args []string) error {
 	if sh == "" {
 		sh = "/bin/sh"
 	}
-	ui.Step("entering environment %s (%s); exit to leave", ui.Bold(p.Cfg.Goblin.Name), filepath.Base(sh))
-	cmd := p.Env.Exec(p.Root, []string{sh})
+	ui.Step("entering environment %s (%s); type `exit` to leave", ui.Bold(p.Cfg.Goblin.Name), filepath.Base(sh))
+	ui.Info("the prompt is prefixed with %s while you are inside", ui.Bold("(goblin:"+p.Cfg.Goblin.Name+")"))
+	launch := prepareShell(p.Env, sh)
+	if launch.cleanup != nil {
+		defer launch.cleanup()
+	}
+	cmd := p.Env.Exec(p.Root, launch.argv)
 	cmd.Env = append(cmd.Env, "GOBLIN_SHELL=1")
+	cmd.Env = append(cmd.Env, launch.extraEnv...)
 	err = cmd.Run()
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {

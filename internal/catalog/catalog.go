@@ -461,3 +461,37 @@ func Expand(s string, vars map[string]string) string {
 	)
 	return r.Replace(s)
 }
+
+// containmentKeep decides whether a manager env var belongs in the
+// always-on containment baseline. Only pure redirections into the goblin
+// root ({root}/{bin}) qualify: they move a tool's global caches, homes and
+// install prefixes inside .goblin/ without changing project-specific
+// behaviour. Path-scoped vars ({path}, e.g. VIRTUAL_ENV) and behaviour
+// flags (GOFLAGS, PIP_REQUIRE_VIRTUALENV) are left out.
+func containmentKeep(value string) bool {
+	if !strings.Contains(value, "{root}") && !strings.Contains(value, "{bin}") {
+		return false
+	}
+	return !strings.Contains(value, "{path}")
+}
+
+// Containment returns the baseline isolation variables applied to every
+// goblin environment, before any configured manager. It redirects the
+// well-known global locations of every known manager into the root, so a
+// tool used ad-hoc inside `goblin shell` (npm, pip, cargo, …) cannot write
+// to the host even when it is not listed in goblin.toml.
+//
+// Values are templated ({root}, {bin}); expand them with Expand. When two
+// managers name the same variable the later spec wins, which is harmless
+// because every candidate value still points inside the root.
+func Containment() map[string]string {
+	out := map[string]string{}
+	for _, s := range specs {
+		for k, v := range s.Env {
+			if containmentKeep(v) {
+				out[k] = v
+			}
+		}
+	}
+	return out
+}
